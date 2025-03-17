@@ -8,6 +8,7 @@ from packages.loss_functions import calc_loss_batch, calc_loss_loader
 from packages.text_generator import text_to_token_ids, token_ids_to_text, \
     generate_text
 from torch import no_grad, linspace
+from os import getcwd, sep
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
@@ -206,6 +207,8 @@ def plot_losses(num_epochs, tokens_seen, train_losses, val_losses):
     ----------
         None: The function saves the plot as 'loss-plot.pdf' and displays it.
     """
+    folder = getcwd() + sep + "results" + sep
+
     epochs_seen = linspace(0, num_epochs, len(train_losses))
 
     fig, ax1 = plt.subplots(figsize=(5, 3))
@@ -230,5 +233,5 @@ def plot_losses(num_epochs, tokens_seen, train_losses, val_losses):
     ax2.set_xlabel("Tokens seen")
 
     fig.tight_layout()  # Adjust layout to make room
-    plt.savefig("loss-plot.pdf")
+    plt.savefig(folder + "loss-plot.pdf")
     plt.show()

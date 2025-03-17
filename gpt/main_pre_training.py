@@ -6,7 +6,7 @@ Created on Fri Mar 14 16:03:00 2025.
 
 from os import sep
 from time import time
-from torch import manual_seed, device, cuda, no_grad, optim
+from torch import manual_seed, device, cuda, no_grad, optim, save
 from tiktoken import get_encoding
 from packages.transformers import gpt_model
 from packages.dataloaders import create_dataloader_v1
@@ -140,3 +140,10 @@ print(f"Training completed in {execution_time_minutes:.2f} minutes.")
 
 # Plot the training and validation losses.
 plot_losses(num_epochs, tokens_seen, train_losses, val_losses)
+
+# Save the pretrained model and the optimizer state.
+save({
+    "model_state_dict": model.state_dict(),
+    "optimizer_state_dict": optimizer.state_dict(),
+    }, "models" + sep + "model.pth"
+     )
