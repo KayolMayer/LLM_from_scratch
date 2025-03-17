@@ -6,7 +6,7 @@ Created on Mon Mar 17 15:32:05 2025.
 
 from packages.loss_functions import calc_loss_batch, calc_loss_loader
 from packages.text_generator import text_to_token_ids, token_ids_to_text, \
-    generate_text_simple
+    generate_text
 from torch import no_grad, linspace
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
@@ -157,9 +157,10 @@ def generate_and_print_sample(model, tokenizer, device, start_context):
     encoded = text_to_token_ids(start_context, tokenizer).to(device)
 
     with no_grad():
-        token_ids = generate_text_simple(
+        token_ids = generate_text(
             model=model, idx=encoded,
-            max_new_tokens=50, context_size=context_size
+            max_new_tokens=50, context_size=context_size,
+            temperature=1.4, top_k=25, eos_id=None
         )
 
     decoded_text = token_ids_to_text(token_ids, tokenizer)
@@ -171,10 +172,12 @@ def generate_and_print_sample(model, tokenizer, device, start_context):
     context_size = model.pos_emb.weight.shape[0]
     encoded = text_to_token_ids(start_context, tokenizer).to(device)
     with no_grad():
-        token_ids = generate_text_simple(
+        token_ids = generate_text(
             model=model, idx=encoded,
-            max_new_tokens=50, context_size=context_size
+            max_new_tokens=50, context_size=context_size,
+            temperature=1.4, top_k=25, eos_id=None
         )
+
     decoded_text = token_ids_to_text(token_ids, tokenizer)
     # Compact print format
     print(decoded_text.replace("\n", " "))

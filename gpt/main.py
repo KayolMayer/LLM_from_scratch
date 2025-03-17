@@ -129,7 +129,7 @@ num_epochs = 10
 train_losses, val_losses, tokens_seen = train_model_simple(
     model, train_loader, val_loader, optimizer, device,
     num_epochs=num_epochs, eval_freq=5, eval_iter=5,
-    start_context="How old are you?", tokenizer=tokenizer
+    start_context="Every effort moves you", tokenizer=tokenizer
 )
 
 # Show the training time
