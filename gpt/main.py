@@ -5,11 +5,13 @@ Created on Fri Mar 14 16:03:00 2025.
 """
 
 from os import sep
-from torch import manual_seed, device, cuda, no_grad
+from time import time
+from torch import manual_seed, device, cuda, no_grad, optim
 from tiktoken import get_encoding
 from packages.transformers import gpt_model
 from packages.dataloaders import create_dataloader_v1
 from packages.loss_functions import calc_loss_loader
+from packages.training import train_model_simple, plot_losses
 
 # Getting device to run the model.
 device = device("cuda" if cuda.is_available() else "cpu")
@@ -18,18 +20,7 @@ print("The model is running in the", device)
 # GPT2 model
 GPT_CONFIG_124M = {
     "vocab_size": 50257,     # Vocabulary size
-    "context_length": 1024,  # Context length
-    "emb_dim": 768,          # Embedding dimension
-    "n_heads": 12,           # Number of attention heads
-    "n_layers": 12,          # Number of layers
-    "drop_rate": 0.1,        # Dropout rate
-    "qkv_bias": False        # Query-Key-Value bias
-}
-
-# My mini GPT2 model
-GPT_CONFIG_124M = {
-    "vocab_size": 50257,     # Vocabulary size
-    "context_length": 256,  # Context length
+    "context_length": 256,   # Context length (original: 1024)
     "emb_dim": 768,          # Embedding dimension
     "n_heads": 12,           # Number of attention heads
     "n_layers": 12,          # Number of layers
@@ -99,6 +90,9 @@ print("Validation batches:", len(val_loader))
 # Initialize the GPT model
 model = gpt_model(GPT_CONFIG_124M)
 
+# Define optimizer to train the model.
+optimizer = optim.AdamW(model.parameters(), lr=0.0004, weight_decay=0.1)
+
 # Get the total number of parameters of the GPT model.
 total_params = sum(p.numel() for p in model.parameters())
 print(f"Total number of parameters: {total_params:,}")
@@ -121,3 +115,28 @@ with no_grad():
 
 print("Training loss:", train_loss)
 print("Validation loss:", val_loss)
+
+# Get start time to assess training time.
+start_time = time()
+
+# For reproducibility due to the shuffling in the data loader.
+manual_seed(123)
+
+# Number of training epochs
+num_epochs = 10
+
+# Model training
+train_losses, val_losses, tokens_seen = train_model_simple(
+    model, train_loader, val_loader, optimizer, device,
+    num_epochs=num_epochs, eval_freq=5, eval_iter=5,
+    start_context="How old are you?", tokenizer=tokenizer
+)
+
+# Show the training time
+end_time = time()
+execution_time_minutes = (end_time - start_time) / 60
+
+print(f"Training completed in {execution_time_minutes:.2f} minutes.")
+
+# Plot the training and validation losses.
+plot_losses(num_epochs, tokens_seen, train_losses, val_losses)

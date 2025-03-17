@@ -4,7 +4,7 @@ Created on Fri Mar 14 16:54:47 2025.
 @author: kayol
 """
 
-from torch import no_grad, softmax, argmax, cat
+from torch import no_grad, softmax, argmax, cat, tensor
 
 
 def generate_text_simple(model, idx, max_new_tokens, context_size):
@@ -57,3 +57,49 @@ def generate_text_simple(model, idx, max_new_tokens, context_size):
         idx = cat((idx, idx_next), dim=1)  # (batch, n_tokens+1)
 
     return idx
+
+
+def text_to_token_ids(text, tokenizer):
+    """
+    Convert a text string into a tensor of token IDs using a tokenizer.
+
+    This function tokenizes the given text into token IDs and returns a tensor
+    with an added batch dimension.
+
+    Parameters
+    ----------
+        text (str): The input text to be tokenized.
+        tokenizer: A tokenizer object with an `encode` method for converting
+                  text to token IDs.
+
+    Returns
+    -------
+        torch.Tensor: Tensor of shape (1, seq_len), containing tokenized text.
+    """
+    encoded = tokenizer.encode(text, allowed_special={'<|endoftext|>'})
+    encoded_tensor = tensor(encoded).unsqueeze(0)  # add batch dimension
+
+    return encoded_tensor
+
+
+def token_ids_to_text(token_ids, tokenizer):
+    """
+    Convert a tensor of token IDs back into a text string using a tokenizer.
+
+    This function removes the batch dimension and decodes the token IDs into
+    human-readable text.
+
+    Parameters
+    ----------
+        token_ids (torch.Tensor): A tensor of tokenized text with shape
+                                  (1, seq_len) or (seq_len,).
+        tokenizer: A tokenizer object with a `decode` method for converting
+                   token IDs back to text.
+
+    Returns
+    -------
+        str: The decoded text.
+    """
+    flat = token_ids.squeeze(0)  # remove batch dimension
+
+    return tokenizer.decode(flat.tolist())
