@@ -13,7 +13,7 @@ from packages.loss_functions import calc_loss_loader
 
 # Getting device to run the model.
 device = device("cuda" if cuda.is_available() else "cpu")
-print("The model is running in the ", device)
+print("The model is running in the", device)
 
 # GPT2 model
 GPT_CONFIG_124M = {
