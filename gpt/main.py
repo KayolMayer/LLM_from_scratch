@@ -4,12 +4,16 @@ Created on Fri Mar 14 16:03:00 2025.
 @author: kayol
 """
 
-from os    import sep
-from torch import tensor, manual_seed
+from os import sep
+from torch import manual_seed, device, cuda, no_grad
 from tiktoken import get_encoding
 from packages.transformers import gpt_model
 from packages.dataloaders import create_dataloader_v1
-from packages.text_generator import generate_text_simple
+from packages.loss_functions import calc_loss_loader
+
+# Getting device to run the model.
+device = device("cuda" if cuda.is_available() else "cpu")
+print("The model is running in the ", device)
 
 # GPT2 model
 GPT_CONFIG_124M = {
@@ -103,3 +107,17 @@ print(f"Total number of parameters: {total_params:,}")
 total_size_bytes = total_params * 4  # each parameter has 4 bytes = 32 bits
 total_size_mb = total_size_bytes / (1024 * 1024)  # conversion to MB
 print(f"Total size of the model: {total_size_mb:.2f} MB")
+
+# Pass model to device in order to run it.
+model.to(device)
+
+# For reproducibility due to the shuffling in the data loader.
+manual_seed(123)
+
+# Compute the loss function
+with no_grad():
+    train_loss = calc_loss_loader(train_loader, model, device)
+    val_loss = calc_loss_loader(val_loader, model, device)
+
+print("Training loss:", train_loss)
+print("Validation loss:", val_loss)
