@@ -4,7 +4,9 @@ Created on Mon Mar 17 15:32:05 2025.
 @author: kayol
 """
 
-from packages.loss_functions import calc_loss_batch, calc_loss_loader
+from packages.loss_functions import calc_loss_batch, calc_loss_loader, \
+    calc_loss_batch_spam, calc_loss_loader_spam
+from packages.metrics import calc_accuracy_loader
 from packages.text_generator import text_to_token_ids, token_ids_to_text, \
     generate_text
 from torch import no_grad, linspace
@@ -137,6 +139,46 @@ def evaluate_model(model, train_loader, val_loader, device, eval_iter):
     return train_loss, val_loss
 
 
+def evaluate_model_spam(model, train_loader, val_loader, device, eval_iter):
+    """
+    Evaluate a model on both training and validation datasets.
+
+    This function temporarily sets the model to evaluation mode, computes
+    the average loss over a limited number of batches from the training
+    and validation sets, and then restores the model to training mode.
+
+    Parameters
+    ----------
+        model (torch.nn.Module): The neural network model to be evaluated.
+        train_loader (torch.utils.data.DataLoader): DataLoader for the training
+                                                    dataset.
+        val_loader (torch.utils.data.DataLoader): DataLoader for the validation
+                                                  dataset.
+        device (torch.device): The device (CPU or GPU) on which to run
+                               evaluation.
+        eval_iter (int): The number of batches to use for computing the average
+                         loss.
+
+    Returns
+    -------
+        tuple: A tuple containing:
+            - train_loss (float): The average training loss over 'eval_iter'
+                                  batches.
+            - val_loss (float): The average validation loss over 'eval_iter'
+                                batches.
+    """
+    model.eval()
+    with no_grad():
+        train_loss = calc_loss_loader_spam(train_loader, model, device,
+                                           num_batches=eval_iter)
+        val_loss = calc_loss_loader_spam(val_loader, model, device,
+                                         num_batches=eval_iter)
+
+    model.train()
+
+    return train_loss, val_loss
+
+
 def generate_and_print_sample(model, tokenizer, device, start_context):
     """
     Generate and prints a sample text from the model using decoding.
@@ -234,4 +276,132 @@ def plot_losses(num_epochs, tokens_seen, train_losses, val_losses):
 
     fig.tight_layout()  # Adjust layout to make room
     plt.savefig(folder + "loss-plot.pdf")
+    plt.show()
+
+
+def train_classifier_spam(model, train_loader, val_loader, optimizer, device,
+                          num_epochs, eval_freq, eval_iter):
+    """
+    Train a language model using mini-batch gradient descent.
+
+    This function iterates through the training data, computes loss, updates
+    model parameters, and periodically evaluates the model on both the training
+    and validation sets. After each epoch, it generates and prints a sample
+    text to monitor progress.
+
+    Parameters
+    ----------
+        model (torch.nn.Module): The neural network model to be trained.
+        train_loader (torch.utils.data.DataLoader): DataLoader for the training
+                                                    dataset.
+        val_loader (torch.utils.data.DataLoader): DataLoader for the validation
+                                                  dataset.
+        optimizer (torch.optim.Optimizer): Optimizer for updating model
+                                           parameters.
+        device (torch.device): The device (CPU or GPU) on which to train the
+                               model.
+        num_epochs (int): The number of training epochs.
+        eval_freq (int): The number of steps between each evaluation.
+        eval_iter (int): The number of evaluation iterations during validation.
+
+    Returns
+    -------
+        tuple: A tuple containing:
+            - train_losses (list of float): List of training losses at each
+                                            evaluation step.
+            - val_losses (list of float): List of validation losses at each
+                                          evaluation step.
+            - track_tokens_seen (list of int): Cumulative number of tokens
+                                               processed at each evaluation
+                                               step.
+    """
+    # Initialize lists to track losses and examples seen
+    train_losses, val_losses, train_accs, val_accs = [], [], [], []
+    examples_seen, global_step = 0, -1
+
+    # Main training loop
+    for epoch in range(num_epochs):
+        model.train()  # Set model to training mode
+
+        for input_batch, target_batch in train_loader:
+            # Reset loss gradients from previous batch iteration
+            optimizer.zero_grad()
+            loss = calc_loss_batch_spam(input_batch, target_batch, model,
+                                        device)
+            # Calculate loss gradients
+            loss.backward()
+            # Update model weights using loss gradients
+            optimizer.step()
+            # New: track examples instead of tokens
+            examples_seen += input_batch.shape[0]
+            global_step += 1
+
+            # Optional evaluation step
+            if global_step % eval_freq == 0:
+                train_loss, val_loss = evaluate_model_spam(
+                    model, train_loader, val_loader, device, eval_iter)
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                print(f"Ep {epoch+1} (Step {global_step:06d}): "
+                      f"Train loss {train_loss:.3f}, Val loss {val_loss:.3f}")
+
+        # Calculate accuracy after each epoch
+        train_accuracy = calc_accuracy_loader(train_loader, model, device,
+                                              num_batches=eval_iter)
+        val_accuracy = calc_accuracy_loader(val_loader, model, device,
+                                            num_batches=eval_iter)
+        print(f"Training accuracy: {train_accuracy*100:.2f}% | ", end="")
+        print(f"Validation accuracy: {val_accuracy*100:.2f}%")
+        train_accs.append(train_accuracy)
+        val_accs.append(val_accuracy)
+
+    return train_losses, val_losses, train_accs, val_accs, examples_seen
+
+
+def plot_values(epochs_seen, examples_seen, train_values, val_values,
+                label="loss"):
+    """
+    Plot training and validation values over epochs with a secondary x-axis.
+
+    This function generates a line plot with:
+    - The primary x-axis representing epochs.
+    - The secondary x-axis representing the number of examples seen.
+    - The y-axis representing the specified metric (e.g., loss, accuracy).
+    - A legend indicating training and validation values.
+
+    Parameters
+    ----------
+        epochs_seen (list of int): A list of epoch numbers at which values were
+                                   recorded.
+        examples_seen (list of int): A list of cumulative example counts
+                                     corresponding to recorded values.
+        train_values (list of float): Training values recorded at different
+                                      epochs.
+        val_values (list of float): Validation values recorded at different
+                                    epochs.
+        label (str, optional): The name of the metric being plotted
+                               (e.g., "loss", "accuracy"). Default is "loss".
+
+    Returns
+    -------
+        None: The function saves the plot as `{label}-plot.pdf` and displays.
+    """
+    fig, ax1 = plt.subplots(figsize=(5, 3))
+
+    # Plot training and validation loss against epochs
+    ax1.plot(epochs_seen, train_values, label=f"Training {label}")
+    ax1.plot(epochs_seen, val_values, linestyle="-.",
+             label=f"Validation {label}")
+    ax1.set_xlabel("Epochs")
+    ax1.set_ylabel(label.capitalize())
+    ax1.legend()
+
+    # Create a second x-axis for examples seen
+    ax2 = ax1.twiny()  # Create a second x-axis that shares the same y-axis
+    # Invisible plot for aligning ticks
+    ax2.plot(examples_seen, train_values, alpha=0)
+    ax2.set_xlabel("Examples seen")
+
+    fig.tight_layout()  # Adjust layout to make room
+    plt.savefig(f"{label}-plot.pdf")
     plt.show()

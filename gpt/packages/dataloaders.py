@@ -5,8 +5,9 @@ Created on Fri Mar 14 11:35:05 2025.
 """
 
 from torch.utils.data import Dataset, DataLoader
-from torch import tensor
+from torch import tensor, long
 from tiktoken import get_encoding
+from pandas import read_csv
 
 
 class gpt_dataset_v1(Dataset):
@@ -121,3 +122,108 @@ def create_dataloader_v1(txt, batch_size=4, max_length=256, stride=128,
     )
 
     return dataloader
+
+
+class dataset_spam(Dataset):
+    """
+    A PyTorch Dataset for spam detection.
+
+    This dataset loads text messages from a CSV file, tokenizes them using
+    a provided tokenizer, and applies padding/truncation to ensure all
+    sequences have the same length.
+
+    Attributes
+    ----------
+        data (pandas.DataFrame): The loaded dataset containing text messages.
+        encoded_texts (list of list of int): List of tokenized and padded text
+                                             messages.
+        max_length (int): The maximum length of tokenized sequences.
+
+    Parameters
+    ----------
+        csv_file (str): Path to the CSV file containing the dataset.
+        tokenizer: A tokenizer object with an `encode` method for tokenizing.
+        max_length (int, optional): The fixed length for tokenized sequences.
+                                    If None, the longest sequence determines
+                                    the length. (default: None)
+        pad_token_id (int, optional): The token ID used for padding shorter
+                                      sequences.
+                                      Default 50256 (GPT-2 end-of-text token).
+
+    Methods
+    -------
+        __len__():
+            Returns the number of samples in the dataset.
+        __getitem__(idx):
+            Retrieves the tokenized sequence and corresponding label at the
+            specified index.
+    """
+
+    def __init__(self, csv_file, tokenizer, max_length=None,
+                 pad_token_id=50256):
+
+        self.data = read_csv(csv_file)
+
+        # Pre-tokenize texts
+        self.encoded_texts = [
+            tokenizer.encode(text) for text in self.data["Text"]
+        ]
+
+        if max_length is None:
+            self.max_length = self._longest_encoded_length()
+        else:
+            self.max_length = max_length
+            # Truncate sequences if they are longer than max_length
+            self.encoded_texts = [
+                encoded_text[:self.max_length]
+                for encoded_text in self.encoded_texts
+            ]
+
+        # Pad sequences to the longest sequence
+        self.encoded_texts = [
+            encoded_text + [pad_token_id] * (self.max_length-len(encoded_text))
+            for encoded_text in self.encoded_texts
+        ]
+
+    def __getitem__(self, index):
+        """
+        Retrieve the tokenized sequence and label at the specified index.
+
+        Parameters
+        ----------
+            index (int): The index of the sample to retrieve.
+
+        Returns
+        -------
+            tuple: A tuple containing:
+                - torch.Tensor: The tokenized input tensor (max_length,).
+                - torch.Tensor: The label tensor (e.g., 0 for ham, 1 for spam).
+        """
+        encoded = self.encoded_texts[index]
+        label = self.data.iloc[index]["Label"]
+        return (
+            tensor(encoded, dtype=long),
+            tensor(label, dtype=long)
+        )
+
+    def __len__(self):
+        """
+        Return the total number of samples in the dataset.
+
+        Returns
+        -------
+            int: The number of rows in the dataset.
+        """
+        return len(self.data)
+
+    def _longest_encoded_length(self):
+        """
+        Compute and returns the length of the longest tokenized sequence.
+
+        Returns
+        -------
+            int: The length of the longest encoded text sequence.
+        """
+        max_length = max([len(enc_text) for enc_text in self.encoded_texts])
+
+        return max_length

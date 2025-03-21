@@ -182,3 +182,53 @@ def generate_text(model, idx, max_new_tokens, context_size, temperature=0.0,
         idx = cat((idx, idx_next), dim=1)  # (batch_size, num_tokens+1)
 
     return idx
+
+
+def classify_review(text, model, tokenizer, device, max_length=None,
+                    pad_token_id=50256):
+    """
+    Classify a given text review as "spam" or "not spam" using a trained model.
+
+    This function tokenizes the input text, processes it to match the model's
+    expected input format (including truncation and padding), and performs
+    inference to predict whether the text is spam.
+
+    Parameters
+    ----------
+        text (str): The input text review to be classified.
+        model (torch.nn.Module): The trained spam classification model.
+        tokenizer: A tokenizer object with an `encode` method for tokenizing.
+        device (torch.device): The device (CPU or GPU) form computations.
+        max_length (int, optional): The maximum sequence length for tokens.
+                                    If None, the model's supported context
+                                    length is used. (default: None)
+        pad_token_id (int, optional): The token ID for pad shorter sequences.
+                                      Default 50256 (GPT-2 end-of-text token).
+
+    Returns
+    -------
+        str: The classification result, either "spam" or "not spam".
+    """
+    model.eval()
+
+    # Prepare inputs to the model
+    input_ids = tokenizer.encode(text)
+    supported_context_length = model.pos_emb.weight.shape[0]
+
+    # Truncate sequences if they too long
+    input_ids = input_ids[:min(max_length, supported_context_length)]
+
+    # Pad sequences to the longest sequence
+    input_ids += [pad_token_id] * (max_length - len(input_ids))
+    # add batch dimension
+    input_tensor = tensor(input_ids, device=device).unsqueeze(0)
+
+    # Model inference
+    with no_grad():
+        # Logits of the last output token
+        logits = model(input_tensor)[:, -1, :]
+
+    predicted_label = argmax(logits, dim=-1).item()
+
+    # Return the classified result
+    return "spam" if predicted_label == 1 else "not spam"
